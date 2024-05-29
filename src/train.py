@@ -2,10 +2,12 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from torch_geometric_temporal.dataset import PemsBayDatasetLoader
-from torch_geometric_temporal.signal import temporal_signal_split
-from model.dcrnn import DCRNN
+from src.torch_geometric_temporal.pems_bay import PemsBayDatasetLoader
+from src.torch_geometric_temporal.train_test_split import temporal_signal_split
+from src.model.dcrnn import DCRNN
 
+# import ssl
+# ssl._create_default_https_context = ssl._create_unverified_context
 
 loader = PemsBayDatasetLoader()
 dataset = loader.get_dataset()
