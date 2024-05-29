@@ -4,3 +4,5 @@ tgnn_explain/
 
 __pycache__/
 .vscode/
+
+runs/logs/
