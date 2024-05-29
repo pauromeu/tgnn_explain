@@ -135,7 +135,6 @@ for epoch in range(start_epoch, 100):
             end="\r",
         )
     writer.add_scalar("Training Loss", running_loss / len(train_loader), epoch)
-    print(f"Epoch {epoch+1}, Loss: {running_loss / len(train_loader)}")
 
     # Validation loop
     model.eval()
