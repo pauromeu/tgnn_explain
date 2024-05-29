@@ -1,5 +1,7 @@
-from torch_geometric.nn import GCNConv
-from torch_geometric_temporal.nn.recurrent.dcrnn import DCRNN as DCRNN_TG
+import torch
+from torch import nn
+from src.torch_geometric_temporal.dcrnn import DCRNN as DCRNN_TG
+import torch.nn.functional as F
 
 
 class DCRNN(nn.Module):
