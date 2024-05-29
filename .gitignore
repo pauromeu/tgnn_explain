@@ -1,3 +1,6 @@
 data/
 gnn_temp/
 tgnn_explain/
+
+__pycache__/
+.vscode/
