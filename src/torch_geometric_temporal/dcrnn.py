@@ -38,6 +38,18 @@ class DConv(MessagePassing):
 
     def message(self, x_j, norm):
         return norm.view(-1, 1) * x_j
+    
+    def propagate_diffusion(self, adj_matrix, x):
+        r"""The initial call to start propagating messages.
+        Args:
+            edge_index (Sparse Tensor): The edge indices.
+            x (Tensor)
+        """
+        n, b, f = x.shape
+        x = x.view(n, -1)
+        return torch.sparse.mm(adj_matrix, x).view(n, b, f)
+
+        
 
     def forward(
         self,
@@ -76,6 +88,20 @@ class DConv(MessagePassing):
         reverse_edge_index = adj_mat.transpose(0, 1)
         reverse_edge_index, vv = dense_to_sparse(reverse_edge_index)
 
+        normalized_adj = torch.sparse_coo_tensor(
+            edge_index,
+            norm_out*edge_weight,
+            (X.size(0), X.size(0)),
+            requires_grad=False,
+        )
+
+        normalized_reverse_adj = torch.sparse_coo_tensor(
+            reverse_edge_index,
+            norm_in*edge_weight,
+            (X.size(0), X.size(0)),
+            requires_grad=False,
+        )
+
         Tx_0 = X
         Tx_1 = X
         H = torch.matmul(Tx_0, (self.weight[0])[0]) + torch.matmul(
@@ -83,8 +109,8 @@ class DConv(MessagePassing):
         )
 
         if self.weight.size(1) > 1:
-            Tx_1_o = self.propagate(edge_index, x=X, norm=norm_out, size=None)
-            Tx_1_i = self.propagate(reverse_edge_index, x=X, norm=norm_in, size=None)
+            Tx_1_o = self.propagate_diffusion(normalized_adj, x=X)
+            Tx_1_i = self.propagate_diffusion(normalized_reverse_adj, x=X)
             H = (
                 H
                 + torch.matmul(Tx_1_o, (self.weight[0])[1])
@@ -92,10 +118,10 @@ class DConv(MessagePassing):
             )
 
         for k in range(2, self.weight.size(1)):
-            Tx_2_o = self.propagate(edge_index, x=Tx_1_o, norm=norm_out, size=None)
+            Tx_2_o = self.propagate_diffusion(normalized_adj, x=Tx_1_o)
             Tx_2_o = 2.0 * Tx_2_o - Tx_0
-            Tx_2_i = self.propagate(
-                reverse_edge_index, x=Tx_1_i, norm=norm_in, size=None
+            Tx_2_i = self.propagate_diffusion(
+                normalized_reverse_adj, x=Tx_1_i
             )
             Tx_2_i = 2.0 * Tx_2_i - Tx_0
             H = (
@@ -166,23 +192,23 @@ class DCRNN(torch.nn.Module):
 
     def _set_hidden_state(self, X, H):
         if H is None:
-            H = torch.zeros(X.shape[0], self.out_channels).to(X.device)
+            H = torch.zeros(X.shape[0], X.shape[1], self.out_channels).to(X.device)
         return H
 
     def _calculate_update_gate(self, X, edge_index, edge_weight, H):
-        Z = torch.cat([X, H], dim=1)
+        Z = torch.cat([X, H], dim=-1)
         Z = self.conv_x_z(Z, edge_index, edge_weight)
         Z = torch.sigmoid(Z)
         return Z
 
     def _calculate_reset_gate(self, X, edge_index, edge_weight, H):
-        R = torch.cat([X, H], dim=1)
+        R = torch.cat([X, H], dim=-1)
         R = self.conv_x_r(R, edge_index, edge_weight)
         R = torch.sigmoid(R)
         return R
 
     def _calculate_candidate_state(self, X, edge_index, edge_weight, H, R):
-        H_tilde = torch.cat([X, H * R], dim=1)
+        H_tilde = torch.cat([X, H * R], dim=-1)
         H_tilde = self.conv_x_h(H_tilde, edge_index, edge_weight)
         H_tilde = torch.tanh(H_tilde)
         return H_tilde
