@@ -1,6 +1,10 @@
 import os
 import torch
 
+from torch.utils.data import DataLoader
+from torch_geometric.explain import Explainer, GNNExplainer
+
+from src.data import TemporalDataset, collate_fn, get_loaders, get_pems_bay_dataset
 from src.model.dcrnn import DCRNN
 
 # TODO: Create configuration file to enter the hyperparameters of the model, training, etc.
@@ -10,6 +14,23 @@ from src.model.dcrnn import DCRNN
 node_features = 2
 out_channels = 32
 K = 2
+
+# Data
+proportion_original_dataset = 0.01  # Use 1% of the original dataset to debug
+
+# Explainer
+explanation_type = "model"
+node_mask_type = "attributes"
+edge_mask_type = None
+model_config = dict(mode="regression", task_level="node", return_type="raw")
+
+# Training parameters
+num_epochs_exp = 200
+lr_exp = 0.01
+
+# Evaluation running parameters
+num_workers = 1
+batch_size = 16
 
 # Paths
 model_path = "runs/model_checkpoint.pth"
@@ -31,3 +52,29 @@ if __name__ == "__main__":
         )
     else:
         raise FileNotFoundError(f"No checkpoint found at {checkpoint_path}")
+
+    explainer = Explainer(
+        model=model,
+        algorithm=GNNExplainer(
+            epochs=num_epochs_exp, lr=lr_exp, log_steps=10, device=device
+        ),
+        explanation_type=explanation_type,
+        node_mask_type=node_mask_type,
+        edge_mask_type=edge_mask_type,
+        model_config=model_config,
+    )
+
+    dataset = get_pems_bay_dataset()
+
+    _, _, test_loader = get_loaders(
+        dataset,
+        val_ratio=0.1,
+        test_ratio=0.2,
+        proportion_original_dataset=proportion_original_dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+    )
+
+    for i, data in enumerate(test_loader):
+        explainer.explain(data, logs_path=logs_path, idx=i)
+        break  # For now, only explain one batch
