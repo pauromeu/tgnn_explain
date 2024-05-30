@@ -1,10 +1,8 @@
 import os
 import torch
-
-from torch.utils.data import DataLoader
 from torch_geometric.explain import Explainer, GNNExplainer
 
-from src.data import TemporalDataset, collate_fn, get_loaders, get_pems_bay_dataset
+from src.data import get_loaders, get_pems_bay_dataset
 from src.model.dcrnn import DCRNN
 
 # TODO: Create configuration file to enter the hyperparameters of the model, training, etc.
@@ -19,8 +17,10 @@ K = 2
 proportion_original_dataset = 0.01  # Use 1% of the original dataset to debug
 
 # Explainer
-explanation_type = "model"
-node_mask_type = "attributes"
+node_index = 10  # Explain node 10 as an example
+
+explanation_type = "model"  # ["model", "phenomenon"]
+node_mask_type = "object"  # [None, "object", "common_attributes", "attributes"]
 edge_mask_type = None
 model_config = dict(mode="regression", task_level="node", return_type="raw")
 
@@ -76,5 +76,27 @@ if __name__ == "__main__":
     )
 
     for i, data in enumerate(test_loader):
-        explainer.explain(data, logs_path=logs_path, idx=i)
+        x, edge_index, edge_weight, y = data
+        x = x.to(device)
+        edge_index = edge_index[0].to(device)
+        edge_weight = edge_weight[0].to(device)
+        y = y.to(device)
+
+        explanation = explainer(
+            x=x,
+            edge_index=edge_index,
+            edge_weight=edge_weight,
+            target=y,
+            index=node_index,
+        )
         break  # For now, only explain one batch
+
+    print(f"Generated explanations in {explanation.available_explanations}")
+
+    path = "feature_importance.png"
+    explanation.visualize_feature_importance(path, top_k=10)
+    print(f"Feature importance plot has been saved to '{path}'")
+
+    path = "subgraph.pdf"
+    explanation.visualize_graph(path)
+    print(f"Subgraph visualization plot has been saved to '{path}'")
