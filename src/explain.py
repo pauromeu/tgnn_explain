@@ -5,16 +5,14 @@ from torch_geometric.explain import Explainer, GNNExplainer
 from src.data import get_loaders, get_pems_bay_dataset
 from src.model.dcrnn import DCRNN
 
+# =====================================
+# =====================================
+# Explain a **trained** DCRNN model on the Pems-Bay dataset
+# =====================================
+# =====================================
+
 # TODO: Create configuration file to enter the hyperparameters of the model, training, etc.
 # TODO: Model parameters must be the same as those used for training. Save them to avoid load incompatibilities.
-
-# Model
-node_features = 2
-out_channels = 32
-K = 2
-
-# Data
-proportion_original_dataset = 0.01  # Use 1% of the original dataset to debug
 
 # Explainer
 node_index = 10  # Explain node 10 as an example
@@ -23,6 +21,14 @@ explanation_type = "model"  # ["model", "phenomenon"]
 node_mask_type = "object"  # [None, "object", "common_attributes", "attributes"]
 edge_mask_type = None
 model_config = dict(mode="regression", task_level="node", return_type="raw")
+
+# Model
+node_features = 2
+out_channels = 32
+K = 2
+
+# Data
+proportion_original_dataset = 0.01  # Use 1% of the original dataset to debug
 
 # Training parameters
 num_epochs_exp = 200
@@ -38,6 +44,9 @@ logs_path = "runs/logs-explain/"
 checkpoint_path = "runs/model_checkpoint.pth"
 
 if __name__ == "__main__":
+    # =====================================
+    # Load model to explain
+    # =====================================
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     model = DCRNN(node_features=node_features, out_channels=out_channels, K=K).to(
@@ -53,16 +62,9 @@ if __name__ == "__main__":
     else:
         raise FileNotFoundError(f"No checkpoint found at {checkpoint_path}")
 
-    explainer = Explainer(
-        model=model,
-        algorithm=GNNExplainer(
-            epochs=num_epochs_exp, lr=lr_exp, log_steps=10, device=device
-        ),
-        explanation_type=explanation_type,
-        node_mask_type=node_mask_type,
-        edge_mask_type=edge_mask_type,
-        model_config=model_config,
-    )
+    # =====================================
+    # Test data to explain
+    # =====================================
 
     dataset = get_pems_bay_dataset()
 
@@ -74,6 +76,25 @@ if __name__ == "__main__":
         batch_size=batch_size,
         num_workers=num_workers,
     )
+
+    # =====================================
+    # Explainer definition
+    # =====================================
+
+    explainer = Explainer(
+        model=model,
+        algorithm=GNNExplainer(
+            epochs=num_epochs_exp, lr=lr_exp, log_steps=10, device=device
+        ),
+        explanation_type=explanation_type,
+        node_mask_type=node_mask_type,
+        edge_mask_type=edge_mask_type,
+        model_config=model_config,
+    )
+
+    # =====================================
+    # Running explanation
+    # =====================================
 
     for i, data in enumerate(test_loader):
         x, edge_index, edge_weight, y = data
