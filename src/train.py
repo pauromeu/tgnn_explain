@@ -1,12 +1,11 @@
 import os
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from src.data import TemporalDataset, collate_fn
-from src.torch_geometric_temporal.pems_bay import PemsBayDatasetLoader
+from src.data import get_loaders, get_pems_bay_dataset
 from src.torch_geometric_temporal.train_test_split import temporal_signal_split
 from src.model.dcrnn import DCRNN
+
 # import batch from torch_geometric
 from torch_geometric.data import Batch
 
@@ -42,48 +41,15 @@ checkpoint_path = "runs/model_checkpoint.pth"
 # Data
 # =====================================
 if __name__ == "__main__":
-    # Uncomment the following lines to download the dataset if SSL certificate verification fails
-    try:
-        loader = PemsBayDatasetLoader()
-        dataset = loader.get_dataset()
-    except Exception as e:
-        print(f"Error downloading the dataset: {e}")
-        print("Trying to download the dataset without SSL certificate verification")
-        import ssl
-        ssl._create_default_https_context = ssl._create_unverified_context
-        loader = PemsBayDatasetLoader()
-        dataset = loader.get_dataset()
+    dataset = get_pems_bay_dataset()
 
-    _, dataset = temporal_signal_split(dataset, train_ratio=1 - proportion_original_dataset)
-    train_dataset_, test_dataset = temporal_signal_split(dataset, train_ratio=0.8)
-    train_dataset, val_dataset = temporal_signal_split(train_dataset_, train_ratio=0.9)
-
-    print(f"Train dataset length: {train_dataset.snapshot_count}")
-    print(f"Validation dataset length: {val_dataset.snapshot_count}")
-    print(f"Test dataset length: {test_dataset.snapshot_count}")
-
-    train_loader = DataLoader(
-        TemporalDataset(train_dataset),
+    train_loader, val_loader, test_loader = get_loaders(
+        dataset,
+        val_ratio=0.1,
+        test_ratio=0.2,
+        proportion_original_dataset=proportion_original_dataset,
         batch_size=batch_size,
-        shuffle=True,
         num_workers=num_workers,
-        collate_fn=collate_fn,
-    )
-
-    val_loader = DataLoader(
-        TemporalDataset(val_dataset),
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        collate_fn=collate_fn,
-    )
-
-    test_loader = DataLoader(
-        TemporalDataset(test_dataset),
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        collate_fn=collate_fn,
     )
 
     # =====================================
@@ -92,8 +58,9 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    model = DCRNN(node_features=node_features, out_channels=out_channels, K=K).to(device)
-
+    model = DCRNN(node_features=node_features, out_channels=out_channels, K=K).to(
+        device
+    )
 
     # =====================================
     # Training
