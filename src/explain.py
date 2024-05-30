@@ -36,7 +36,7 @@ lr_exp = 0.01
 
 # Evaluation running parameters
 num_workers = 1
-batch_size = 16
+batch_size = 1
 
 # Paths
 model_path = "runs/model_checkpoint.pth"
@@ -107,7 +107,7 @@ if __name__ == "__main__":
             x=x,
             edge_index=edge_index,
             edge_weight=edge_weight,
-            target=y,
+            # target=y,
             index=node_index,
         )
         break  # For now, only explain one batch
