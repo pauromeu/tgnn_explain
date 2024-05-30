@@ -21,3 +21,9 @@ pip install tensorboard
 ```bash
 python -m src.train
 ```
+
+### Explain the model:
+
+```bash
+python -m src.explain
+```
