@@ -18,7 +18,7 @@ class DConv(MessagePassing):
 
     """
 
-    def __init__(self, in_channels, out_channels, K, bias=True):
+    def __init__(self, in_channels, out_channels, K, bias=True, stash_adj_matrix = False):
         super(DConv, self).__init__(aggr="add", flow="source_to_target")
         assert K > 0
         self.in_channels = in_channels
@@ -32,28 +32,41 @@ class DConv(MessagePassing):
 
         self.__reset_parameters()
 
+        self.norm_in = None
+        self.norm_out = None
+        self.stash_adj_matrix = stash_adj_matrix
+
+        
+    def _compute_norms(self, edge_index, edge_weight, X):
+        adj_mat = to_dense_adj(edge_index, edge_attr=edge_weight)
+        adj_mat = adj_mat.reshape(adj_mat.size(1), adj_mat.size(2))
+        deg_out = torch.matmul(
+            adj_mat, torch.ones(size=(adj_mat.size(0), 1)).to(X.device)
+        )
+        deg_out = deg_out.flatten()
+        deg_in = torch.matmul(
+            torch.ones(size=(1, adj_mat.size(0))).to(X.device), adj_mat
+        ).to(X.device)
+        deg_in = deg_in.flatten()
+
+        deg_out_inv = torch.reciprocal(deg_out)
+        deg_in_inv = torch.reciprocal(deg_in)
+        row, col = edge_index
+        norm_out = deg_out_inv[row]
+        norm_in = deg_in_inv[col]
+
+        return norm_in, norm_out
+
     def __reset_parameters(self):
         torch.nn.init.xavier_uniform_(self.weight)
         torch.nn.init.zeros_(self.bias)
 
-    def message(self, x_j, norm):
-        return norm.view(-1, 1) * x_j
-    
-    def propagate_diffusion(self, adj_matrix, x):
-        r"""The initial call to start propagating messages.
-        Args:
-            edge_index (Sparse Tensor): The edge indices.
-            x (Tensor)
-        """
-        n, b, f = x.shape
-        x = x.view(n, -1)
-        return torch.sparse.mm(adj_matrix, x).view(n, b, f)
-
-        
+    def message(self, x_j, norm, edge_weight):
+        return (norm*edge_weight).view(-1, 1) * x_j       
 
     def forward(
         self,
-        X: torch.FloatTensor,
+        X: torch.FloatTensor, # shape (B,N,F)
         edge_index: torch.LongTensor,
         edge_weight: torch.FloatTensor,
     ) -> torch.FloatTensor:
@@ -68,39 +81,16 @@ class DConv(MessagePassing):
         Return types:
             * **H** (PyTorch Float Tensor) - Hidden state matrix for all nodes.
         """
-        adj_mat = to_dense_adj(edge_index, edge_attr=edge_weight)
-        adj_mat = adj_mat.reshape(adj_mat.size(1), adj_mat.size(2))
-        deg_out = torch.matmul(
-            adj_mat, torch.ones(size=(adj_mat.size(0), 1)).to(X.device)
-        )
-        deg_out = deg_out.flatten()
-        deg_in = torch.matmul(
-            torch.ones(size=(1, adj_mat.size(0))).to(X.device), adj_mat
-        )
-        deg_in = deg_in.flatten()
-
-        deg_out_inv = torch.reciprocal(deg_out)
-        deg_in_inv = torch.reciprocal(deg_in)
-        row, col = edge_index
-        norm_out = deg_out_inv[row]
-        norm_in = deg_in_inv[row]
-
-        reverse_edge_index = adj_mat.transpose(0, 1)
-        reverse_edge_index, vv = dense_to_sparse(reverse_edge_index)
-
-        normalized_adj = torch.sparse_coo_tensor(
-            edge_index,
-            norm_out*edge_weight,
-            (X.size(0), X.size(0)),
-            requires_grad=False,
-        )
-
-        normalized_reverse_adj = torch.sparse_coo_tensor(
-            reverse_edge_index,
-            norm_in*edge_weight,
-            (X.size(0), X.size(0)),
-            requires_grad=False,
-        )
+        if self.stash_adj_matrix and self.norm_in is not None:
+            norm_in = self.norm_in
+            norm_out = self.norm_out
+        else:
+            norm_in, norm_out = self._compute_norms(
+                edge_index, edge_weight, X
+            )
+            if self.stash_adj_matrix:
+                self.norm_in = norm_in
+                self.norm_out = norm_out
 
         Tx_0 = X
         Tx_1 = X
@@ -108,9 +98,14 @@ class DConv(MessagePassing):
             Tx_0, (self.weight[1])[0]
         )
 
+        reverse_edge_index = torch.stack(
+            [edge_index[1], edge_index[0]], dim=0
+        ).to(X.device)
+
         if self.weight.size(1) > 1:
-            Tx_1_o = self.propagate_diffusion(normalized_adj, x=X)
-            Tx_1_i = self.propagate_diffusion(normalized_reverse_adj, x=X)
+            Tx_1_o = self.propagate(reverse_edge_index, x=X, norm=norm_out, size=None, edge_weight=edge_weight, flow="source_to_target")
+            Tx_1_i = self.propagate(edge_index, x=X, norm=norm_in, size=None, edge_weight=edge_weight, flow="source_to_target")
+
             H = (
                 H
                 + torch.matmul(Tx_1_o, (self.weight[0])[1])
@@ -118,11 +113,10 @@ class DConv(MessagePassing):
             )
 
         for k in range(2, self.weight.size(1)):
-            Tx_2_o = self.propagate_diffusion(normalized_adj, x=Tx_1_o)
+            Tx_2_o = self.propagate(reverse_edge_index, x=Tx_1_o, norm=norm_out, size=None, edge_weight=edge_weight, flow="source_to_target")
+            Tx_2_i = self.propagate(edge_index, x=Tx_1_i, norm=norm_in, size=None, edge_weight=edge_weight, flow="source_to_target")
+
             Tx_2_o = 2.0 * Tx_2_o - Tx_0
-            Tx_2_i = self.propagate_diffusion(
-                normalized_reverse_adj, x=Tx_1_i
-            )
             Tx_2_i = 2.0 * Tx_2_i - Tx_0
             H = (
                 H
@@ -151,7 +145,7 @@ class DCRNN(torch.nn.Module):
 
     """
 
-    def __init__(self, in_channels: int, out_channels: int, K: int, bias: bool = True):
+    def __init__(self, in_channels: int, out_channels: int, K: int, bias: bool = True, stash_adj_matrix = False):
         super(DCRNN, self).__init__()
 
         self.in_channels = in_channels
@@ -159,36 +153,39 @@ class DCRNN(torch.nn.Module):
         self.K = K
         self.bias = bias
 
-        self._create_parameters_and_layers()
+        self._create_parameters_and_layers(stash_adj_matrix)
 
-    def _create_update_gate_parameters_and_layers(self):
+    def _create_update_gate_parameters_and_layers(self, stash_adj_matrix):
         self.conv_x_z = DConv(
             in_channels=self.in_channels + self.out_channels,
             out_channels=self.out_channels,
             K=self.K,
             bias=self.bias,
+            stash_adj_matrix = stash_adj_matrix,
         )
 
-    def _create_reset_gate_parameters_and_layers(self):
+    def _create_reset_gate_parameters_and_layers(self, stash_adj_matrix):
         self.conv_x_r = DConv(
             in_channels=self.in_channels + self.out_channels,
             out_channels=self.out_channels,
             K=self.K,
             bias=self.bias,
+            stash_adj_matrix = stash_adj_matrix,
         )
 
-    def _create_candidate_state_parameters_and_layers(self):
+    def _create_candidate_state_parameters_and_layers(self, stash_adj_matrix):
         self.conv_x_h = DConv(
             in_channels=self.in_channels + self.out_channels,
             out_channels=self.out_channels,
             K=self.K,
             bias=self.bias,
+            stash_adj_matrix = stash_adj_matrix,
         )
 
-    def _create_parameters_and_layers(self):
-        self._create_update_gate_parameters_and_layers()
-        self._create_reset_gate_parameters_and_layers()
-        self._create_candidate_state_parameters_and_layers()
+    def _create_parameters_and_layers(self, stash_adj_matrix):
+        self._create_update_gate_parameters_and_layers(stash_adj_matrix)
+        self._create_reset_gate_parameters_and_layers(stash_adj_matrix)
+        self._create_candidate_state_parameters_and_layers(stash_adj_matrix)
 
     def _set_hidden_state(self, X, H):
         if H is None:
