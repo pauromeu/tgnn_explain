@@ -25,10 +25,12 @@ class DCRNN(nn.Module):
             edge_weight (Tensor): The edge weights [num_edges]
             h (Tensor, optional): The hidden state [num_nodes, out_channels]
         """
+        untimed = False
         if time_steps is not None:
             x = x.reshape(*x.shape[:-1], -1, time_steps)
             untimed = True
 
+        unbatched = False
         if len(x.shape) == 3:
             unbatched = True
             x = x.unsqueeze(0)
