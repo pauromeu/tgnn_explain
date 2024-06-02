@@ -18,7 +18,7 @@ from src.model.dcrnn import DCRNN
 node_index = 10  # Explain node 10 as an example
 
 explanation_type = "model"  # ["model", "phenomenon"]
-node_mask_type = "object"  # [None, "object", "common_attributes", "attributes"]
+node_mask_type = 'attributes'  # [None, "object", "common_attributes", "attributes"]
 edge_mask_type = None
 model_config = dict(mode="regression", task_level="node", return_type="raw")
 
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     )
 
     if os.path.exists(checkpoint_path):
-        checkpoint = torch.load(checkpoint_path)
+        checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         print(
             f"Loaded model from checkpoint with validation loss {checkpoint['best_val_loss']:.4f}"
@@ -98,10 +98,14 @@ if __name__ == "__main__":
 
     for i, data in enumerate(test_loader):
         x, edge_index, edge_weight, y = data
-        x = x.to(device)
+        x = x.squeeze(0).to(device)
         edge_index = edge_index[0].to(device)
         edge_weight = edge_weight[0].to(device)
-        y = y.to(device)
+        y = y.squeeze(0).to(device)
+
+        # need to put x into (N,F) shape
+        time_steps = x.shape[2]
+        x = x.view(x.shape[0], -1)
 
         explanation = explainer(
             x=x,
@@ -109,6 +113,7 @@ if __name__ == "__main__":
             edge_weight=edge_weight,
             # target=y,
             index=node_index,
+            time_steps=time_steps,
         )
         break  # For now, only explain one batch
 
