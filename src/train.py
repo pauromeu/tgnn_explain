@@ -30,7 +30,7 @@ proportion_original_dataset = 0.01  # Use 1% of the original dataset to debug
 # Training
 num_workers = 1
 batch_size = 16
-resume_training = False
+resume_training = True
 
 # Paths
 logs_path = "runs/logs"
@@ -92,30 +92,18 @@ if __name__ == "__main__":
             edge_weight = edge_weight[0].to(device)
             y = y.to(device)
 
-            # need to convert the data to a batch object
-            # data = Batch.from_data_list(data)
-            # x, edge_index, edge_weight, y = data.x, data.edge_index, data.edge_attr, data.y
-            # x = x.to(device)
-            # edge_index = edge_index.to(device)
-            # edge_weight = edge_weight.to(device)
-            # y = y.to(device)
-
             optimizer.zero_grad()
             h = None  # Initialize hidden state
 
-            y_hat, h = model(x, edge_index, edge_weight, h)
+            y_hat = model(x, edge_index, edge_weight, h)
             loss = loss_function(y_hat, y)
             loss.backward()
             optimizer.step()
 
             running_loss += loss.item()
 
-            print(
-                f"Epoch {epoch+1}, Training Snapshot {np.round((s+1) * 100 / len(train_loader), 4)} %",
-                end="\r",
-            )
-        writer.add_scalar("Training Loss", running_loss / len(train_loader), epoch)
-        print("Training Loss", running_loss / len(train_loader), epoch)
+        running_loss /= len(train_loader)
+        writer.add_scalar("Training Loss", running_loss, epoch)
 
         # Validation loop
         model.eval()
@@ -129,20 +117,17 @@ if __name__ == "__main__":
                 y = y.to(device)
 
                 h = None
-                y_hat, h = model(x, edge_index, edge_weight, h)
+                y_hat = model(x, edge_index, edge_weight, h)
                 loss = loss_function(y_hat, y)
                 val_loss += loss.item()
-                print(
-                    f"Epoch {epoch+1}, Validate Snapshot {np.round((s+1) * 100 / len(val_loader), 4)} %",
-                    end="\r",
-                )
+
+        print()
 
         val_loss /= len(test_loader)
         writer.add_scalar("Validation Loss", val_loss, epoch)
-        print("Validation Loss", val_loss, epoch)
 
         print(
-            f"Epoch {epoch+1}, Training Loss: {running_loss / len(train_loader):.4f}, Validation Loss: {val_loss:.4f}"
+            f"Epoch {epoch+1}, Training Loss: {running_loss:.4f}, Validation Loss: {val_loss:.4f}"
         )
 
         # Save the best model
