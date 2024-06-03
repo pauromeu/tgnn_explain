@@ -22,15 +22,16 @@ from torch_geometric.data import Batch
 # Model
 node_features = 2
 out_channels = 32
-K = 2
+K = 3
 
 # Data
-proportion_original_dataset = 0.01  # Use 1% of the original dataset to debug
+proportion_original_dataset = 0.1  # Use 1% of the original dataset to debug
 
 # Training
 num_workers = 1
-batch_size = 16
+batch_size = 64
 resume_training = True
+tau_sampling = 3000 # should be 3000 for full training
 
 # Paths
 logs_path = "runs/logs"
@@ -67,6 +68,7 @@ if __name__ == "__main__":
     # =====================================
 
     start_epoch = 0
+    iterations = 0
     best_val_loss = float("inf")
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     loss_function = torch.nn.MSELoss()
@@ -77,6 +79,7 @@ if __name__ == "__main__":
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         start_epoch = checkpoint["epoch"] + 1
+        iterations = checkpoint["iterations"]
         best_val_loss = checkpoint["best_val_loss"]
         print(
             f"Resuming training from epoch {start_epoch} with best validation loss {best_val_loss:.4f}"
@@ -91,16 +94,32 @@ if __name__ == "__main__":
             edge_index = edge_index[0].to(device)
             edge_weight = edge_weight[0].to(device)
             y = y.to(device)
+            
+            print(x[0])
+            print(y[0])
 
             optimizer.zero_grad()
             h = None  # Initialize hidden state
 
-            y_hat = model(x, edge_index, edge_weight, h)
+            epsilon = tau_sampling / (tau_sampling + torch.exp(torch.tensor(iterations/tau_sampling)))
+            print(iterations)
+            print(epsilon)
+
+            y_hat = model(x, edge_index, edge_weight, h, training_target=y, target_sample_prob=epsilon)
+            print(y_hat[0])
+            1/0
             loss = loss_function(y_hat, y)
             loss.backward()
             optimizer.step()
 
             running_loss += loss.item()
+            iterations += 1
+
+            if (s+1) % (len(train_loader)//100 + 1) == 0:
+              print(
+                  f"\r Epoch {epoch+1}, Training Snapshot {np.round((s+1) * 100 / len(train_loader), 4)} %, Loss:  {running_loss/(s+1)}",
+                  end="",
+              )
 
         running_loss /= len(train_loader)
         writer.add_scalar("Training Loss", running_loss, epoch)
@@ -127,7 +146,7 @@ if __name__ == "__main__":
         writer.add_scalar("Validation Loss", val_loss, epoch)
 
         print(
-            f"Epoch {epoch+1}, Training Loss: {running_loss:.4f}, Validation Loss: {val_loss:.4f}"
+            f"\r Epoch {epoch+1}, Training Loss: {running_loss:.4f}, Validation Loss: {val_loss:.4f}"
         )
 
         # Save the best model
@@ -136,6 +155,7 @@ if __name__ == "__main__":
             torch.save(
                 {
                     "epoch": epoch,
+                    "iterations": iterations,
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "best_val_loss": best_val_loss,

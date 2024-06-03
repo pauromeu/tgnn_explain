@@ -18,7 +18,7 @@ class DCRNN(nn.Module):
         self.recurrent_decoder = DCRNN_TG(node_features, out_channels, K, stash_adj_matrix=stash_adj_matrix)
         self.linear = torch.nn.Linear(out_channels, node_features)
 
-    def forward(self, x, edge_index, edge_weight, training_target = None, time_steps = None, h=None):
+    def forward(self, x, edge_index, edge_weight, time_steps = None, h=None, training_target = None, target_sample_prob = 0):
         """
         Args:
             x (Tensor): The input features [num_nodes, num_features, P]
@@ -26,6 +26,10 @@ class DCRNN(nn.Module):
             edge_weight (Tensor): The edge weights [num_edges]
             h (Tensor, optional): The hidden state [num_nodes, out_channels]
         """
+        # if target_sample_prob is bigger than 0 then training_target must be provided
+        if target_sample_prob > 0 and training_target is None:
+            raise ValueError("training_target must be provided when target_sample_prob is bigger than 0")
+
         untimed = False
         if time_steps is not None:
             x = x.reshape(*x.shape[:-1], -1, time_steps)
@@ -50,6 +54,10 @@ class DCRNN(nn.Module):
             h = self.recurrent_decoder(out, edge_index, edge_weight, h)
             out = self.linear(h) + out
             out_seq.append(out)
+
+            # random sample
+            if target_sample_prob > 0 and torch.rand(1) < target_sample_prob:
+                out = training_target[:, :, :, t]
 
         out_seq = torch.stack(out_seq, dim=3)  # [batch_size, num_nodes, num_features, P]
         if unbatched:
