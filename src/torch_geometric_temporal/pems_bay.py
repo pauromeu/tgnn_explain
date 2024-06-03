@@ -4,7 +4,9 @@ import zipfile
 import numpy as np
 import torch
 from torch_geometric.utils import dense_to_sparse
-from src.torch_geometric_temporal.static_graph_temporal_signal import StaticGraphTemporalSignal
+from src.torch_geometric_temporal.static_graph_temporal_signal import (
+    StaticGraphTemporalSignal,
+)
 
 
 class PemsBayDatasetLoader(object):
