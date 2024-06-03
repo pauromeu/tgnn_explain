@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 
+from src.torch_geometric_temporal.metr_la import METRLADatasetLoader
 from src.torch_geometric_temporal.pems_bay import PemsBayDatasetLoader
 from src.torch_geometric_temporal.train_test_split import temporal_signal_split
 
@@ -38,6 +39,21 @@ def get_pems_bay_dataset():
 
         ssl._create_default_https_context = ssl._create_unverified_context
         loader = PemsBayDatasetLoader()
+        dataset = loader.get_dataset()
+    return dataset
+
+
+def get_metr_la_dataset():
+    try:
+        loader = METRLADatasetLoader()
+        dataset = loader.get_dataset()
+    except Exception as e:
+        print(f"Error downloading the dataset: {e}")
+        print("Trying to download the dataset without SSL certificate verification")
+        import ssl
+
+        ssl._create_default_https_context = ssl._create_unverified_context
+        loader = METRLADatasetLoader()
         dataset = loader.get_dataset()
     return dataset
 
