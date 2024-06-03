@@ -2,7 +2,7 @@ import os
 import torch
 from torch_geometric.explain import Explainer, GNNExplainer
 
-from src.data import get_loaders, get_pems_bay_dataset
+from src.data import get_loaders, get_pems_bay_dataset, get_metr_la_dataset
 from src.model.dcrnn import DCRNN
 
 # =====================================
@@ -15,11 +15,11 @@ from src.model.dcrnn import DCRNN
 # TODO: Model parameters must be the same as those used for training. Save them to avoid load incompatibilities.
 
 # Explainer
-node_index = 10  # Explain node 10 as an example
+node_index = 110  # Explain node 10 as an example
 
 explanation_type = "model"  # ["model", "phenomenon"]
-node_mask_type = 'attributes'  # [None, "object", "common_attributes", "attributes"]
-edge_mask_type = None
+node_mask_type = "object"  # [None, "object", "common_attributes", "attributes"]
+edge_mask_type = "object"  # [None, "object", "common_attributes", "attributes"]
 model_config = dict(mode="regression", task_level="node", return_type="raw")
 
 # Model
@@ -31,7 +31,7 @@ K = 2
 proportion_original_dataset = 0.01  # Use 1% of the original dataset to debug
 
 # Training parameters
-num_epochs_exp = 200
+num_epochs_exp = 500
 lr_exp = 0.01
 
 # Evaluation running parameters
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     # Test data to explain
     # =====================================
 
-    dataset = get_pems_bay_dataset()
+    dataset = get_metr_la_dataset()
 
     _, _, test_loader = get_loaders(
         dataset,
@@ -119,8 +119,17 @@ if __name__ == "__main__":
 
     print(f"Generated explanations in {explanation.available_explanations}")
 
+    # save node mask and edge mask data using torch.save
+    path = "node_mask.pt"
+    torch.save(explanation.node_mask, path)
+    print(f"Node mask has been saved to '{path}'")
+
+    path = "edge_mask.pt"
+    torch.save(explanation.edge_mask, path)
+    print(f"Edge mask has been saved to '{path}'")
+
     path = "feature_importance.png"
-    explanation.visualize_feature_importance(path, top_k=10)
+    explanation.visualize_feature_importance(path, top_k=30)
     print(f"Feature importance plot has been saved to '{path}'")
 
     path = "subgraph.pdf"
