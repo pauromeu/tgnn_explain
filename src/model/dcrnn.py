@@ -14,12 +14,11 @@ class DCRNN(nn.Module):
         """
 
         super(DCRNN, self).__init__()
-        self.recurrent = DCRNN_TG(
-            node_features, out_channels, K, stash_adj_matrix=stash_adj_matrix
-        )
+        self.recurrent_encoder = DCRNN_TG(node_features, out_channels, K, stash_adj_matrix=stash_adj_matrix)
+        self.recurrent_decoder = DCRNN_TG(node_features, out_channels, K, stash_adj_matrix=stash_adj_matrix)
         self.linear = torch.nn.Linear(out_channels, node_features)
 
-    def forward(self, x, edge_index, edge_weight, time_steps=None, h=None):
+    def forward(self, x, edge_index, edge_weight, training_target = None, time_steps = None, h=None):
         """
         Args:
             x (Tensor): The input features [num_nodes, num_features, P]
@@ -36,20 +35,23 @@ class DCRNN(nn.Module):
         if len(x.shape) == 3:
             unbatched = True
             x = x.unsqueeze(0)
-
+    
         batch_size, num_nodes, num_features, P = x.shape
         # num_nodes, num_features, P = x.shape
-        out_seq = []
+
 
         for t in range(P):
-            h = self.recurrent(x[:, :, :, t], edge_index, edge_weight, h)
+            h = self.recurrent_encoder(x[:, :, :, t], edge_index, edge_weight, h)
             h = F.relu(h)
-            out = self.linear(h)
+        
+        out_seq = []
+        out = x[:,:,:,P-1]
+        for t in range(P):
+            h = self.recurrent_decoder(out, edge_index, edge_weight, h)
+            out = self.linear(h) + out
             out_seq.append(out)
 
-        out_seq = torch.stack(
-            out_seq, dim=3
-        )  # [batch_size, num_nodes, num_features, P]
+        out_seq = torch.stack(out_seq, dim=3)  # [batch_size, num_nodes, num_features, P]
         if unbatched:
             out_seq = out_seq.squeeze(0)
         if untimed:
