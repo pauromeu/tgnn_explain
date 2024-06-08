@@ -25,17 +25,17 @@ out_channels = 32
 K = 3
 
 # Data
-proportion_original_dataset = 0.1  # Use 1% of the original dataset to debug
+proportion_original_dataset = 1.0  # Use 1% of the original dataset to debug
 
 # Training
-num_workers = 1
+num_workers = 16
 batch_size = 64
-resume_training = True
-tau_sampling = 3000 # should be 3000 for full training
+resume_training = False
+tau_sampling = 3000  # should be 3000 for full training
 
 # Paths
 logs_path = "runs/logs"
-checkpoint_path = "runs/model_checkpoint.pth"
+checkpoint_path = "runs/model_checkpoint_dcrnn.pth"
 
 
 # =====================================
@@ -71,6 +71,9 @@ if __name__ == "__main__":
     iterations = 0
     best_val_loss = float("inf")
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="min", factor=0.5, patience=5
+    )
     loss_function = torch.nn.MSELoss()
     writer = SummaryWriter(logs_path)
 
@@ -94,32 +97,38 @@ if __name__ == "__main__":
             edge_index = edge_index[0].to(device)
             edge_weight = edge_weight[0].to(device)
             y = y.to(device)
-            
-            print(x[0])
-            print(y[0])
 
             optimizer.zero_grad()
             h = None  # Initialize hidden state
 
-            epsilon = tau_sampling / (tau_sampling + torch.exp(torch.tensor(iterations/tau_sampling)))
-            print(iterations)
-            print(epsilon)
+            epsilon = tau_sampling / (
+                tau_sampling + torch.exp(torch.tensor(iterations / tau_sampling))
+            )
 
-            y_hat = model(x, edge_index, edge_weight, h, training_target=y, target_sample_prob=epsilon)
-            print(y_hat[0])
-            1/0
+            y_hat = model(
+                x,
+                edge_index,
+                edge_weight,
+                h,
+                training_target=y,
+                target_sample_prob=epsilon,
+            )
+
             loss = loss_function(y_hat, y)
             loss.backward()
+
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
             optimizer.step()
 
             running_loss += loss.item()
             iterations += 1
 
-            if (s+1) % (len(train_loader)//100 + 1) == 0:
-              print(
-                  f"\r Epoch {epoch+1}, Training Snapshot {np.round((s+1) * 100 / len(train_loader), 4)} %, Loss:  {running_loss/(s+1)}",
-                  end="",
-              )
+            if (s + 1) % (len(train_loader) // 100 + 1) == 0:
+                print(
+                    f"\r Epoch {epoch+1}, Training Snapshot {np.round((s+1) * 100 / len(train_loader), 4)} %, Loss:  {running_loss/(s+1)}",
+                    end="",
+                )
 
         running_loss /= len(train_loader)
         writer.add_scalar("Training Loss", running_loss, epoch)
@@ -143,6 +152,9 @@ if __name__ == "__main__":
         print()
 
         val_loss /= len(test_loader)
+
+        scheduler.step(val_loss)
+
         writer.add_scalar("Validation Loss", val_loss, epoch)
 
         print(
