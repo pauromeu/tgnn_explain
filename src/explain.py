@@ -16,22 +16,24 @@ from src.model.dcrnn import DCRNN
 
 # Explainer
 node_index = 110  # Explain node 10 as an example
+time_index = 6  # Explain the first time step as an example
+feature_index = 1  # Explain the first feature as an example
 
 explanation_type = "model"  # ["model", "phenomenon"]
-node_mask_type = "object"  # [None, "object", "common_attributes", "attributes"]
+node_mask_type = "attributes"  # [None, "object", "common_attributes", "attributes"]
 edge_mask_type = "object"  # [None, "object", "common_attributes", "attributes"]
 model_config = dict(mode="regression", task_level="node", return_type="raw")
 
 # Model
 node_features = 2
 out_channels = 32
-K = 2
+K = 3
 
 # Data
 proportion_original_dataset = 0.01  # Use 1% of the original dataset to debug
 
 # Training parameters
-num_epochs_exp = 500
+num_epochs_exp = 100
 lr_exp = 0.01
 
 # Evaluation running parameters
@@ -39,9 +41,9 @@ num_workers = 1
 batch_size = 1
 
 # Paths
-model_path = "runs/model_checkpoint.pth"
+model_path = "runs/model_checkpoint_dcrnn.pth"
 logs_path = "runs/logs-explain/"
-checkpoint_path = "runs/model_checkpoint.pth"
+checkpoint_path = "runs/model_checkpoint_dcrnn.pth"
 
 if __name__ == "__main__":
     # =====================================
@@ -49,7 +51,7 @@ if __name__ == "__main__":
     # =====================================
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    model = DCRNN(node_features=node_features, out_channels=out_channels, K=K).to(
+    model = DCRNN(node_features=node_features, out_channels=out_channels, K=K, predicted_time=time_index, predicted_feature=feature_index).to(
         device
     )
 
@@ -66,7 +68,7 @@ if __name__ == "__main__":
     # Test data to explain
     # =====================================
 
-    dataset = get_metr_la_dataset()
+    dataset = get_pems_bay_dataset()
 
     _, _, test_loader = get_loaders(
         dataset,
@@ -128,10 +130,16 @@ if __name__ == "__main__":
     torch.save(explanation.edge_mask, path)
     print(f"Edge mask has been saved to '{path}'")
 
-    path = "feature_importance.png"
-    explanation.visualize_feature_importance(path, top_k=30)
-    print(f"Feature importance plot has been saved to '{path}'")
+    try:
+        path = "feature_importance.png"
+        explanation.visualize_feature_importance(path, top_k=30)
+        print(f"Feature importance plot has been saved to '{path}'")
+    except Exception as e:
+        print(f"Error while generating feature importance plot: {e}")
 
-    path = "subgraph.pdf"
-    explanation.visualize_graph(path)
-    print(f"Subgraph visualization plot has been saved to '{path}'")
+    try:
+        path = "subgraph.pdf"
+        explanation.visualize_graph(path)
+        print(f"Subgraph visualization plot has been saved to '{path}'")
+    except Exception as e:
+        print(f"Error while generating subgraph visualization plot: {e}")

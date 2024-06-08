@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 
 class DCRNN(nn.Module):
-    def __init__(self, node_features, out_channels, K, stash_adj_matrix=False):
+    def __init__(self, node_features, out_channels, K, stash_adj_matrix=False, predicted_time=None, predicted_feature=None):
         """
         Args:
             node_features (int): Number of input features.
@@ -17,6 +17,8 @@ class DCRNN(nn.Module):
         self.recurrent_encoder = DCRNN_TG(node_features, out_channels, K, stash_adj_matrix=stash_adj_matrix)
         self.recurrent_decoder = DCRNN_TG(node_features, out_channels, K, stash_adj_matrix=stash_adj_matrix)
         self.linear = torch.nn.Linear(out_channels, node_features)
+        self.predicted_time = predicted_time
+        self.predicted_feature = predicted_feature
 
     def forward(self, x, edge_index, edge_weight, time_steps = None, h=None, training_target = None, target_sample_prob = 0):
         """
@@ -63,5 +65,8 @@ class DCRNN(nn.Module):
         if unbatched:
             out_seq = out_seq.squeeze(0)
         if untimed:
+            if self.predicted_time is not None and self.predicted_feature is not None:
+                out_seq = out_seq[:, self.predicted_feature, self.predicted_time]
             out_seq = out_seq.reshape(*out_seq.shape[:-2], -1)
+        
         return out_seq
