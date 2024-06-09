@@ -151,7 +151,7 @@ if __name__ == "__main__":
 
         print()
 
-        val_loss /= len(test_loader)
+        val_loss /= len(val_loader)
 
         scheduler.step(val_loss)
 
