@@ -20,18 +20,18 @@ from torch_geometric.data import Batch
 # Hyperparameters
 # =====================================
 # Model
-node_features = 2
+node_features = 1
 out_channels = 32
 K = 3
 
 # Data
-proportion_original_dataset = 1.0  # Use 1% of the original dataset to debug
+proportion_original_dataset = 0.01  # Use 1% of the original dataset to debug
 
 # Training
 num_workers = 16
 batch_size = 64
 resume_training = False
-tau_sampling = 3000  # should be 3000 for full training
+tau_sampling = 20  # should be 3000 for full training
 
 # Paths
 logs_path = "runs/logs"

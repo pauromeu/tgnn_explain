@@ -55,7 +55,8 @@ class METRLADatasetLoader(object):
         A = np.load(os.path.join(self.raw_data_dir, "adj_mat.npy"))
         X = np.load(os.path.join(self.raw_data_dir, "node_values.npy")).transpose(
             (1, 2, 0)
-        )
+        )[:,0,:]
+        X = X[:,None,:]
         X = X.astype(np.float32)
 
         # Normalise as in DCRNN paper (via Z-Score Method)

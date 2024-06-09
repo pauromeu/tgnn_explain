@@ -55,7 +55,8 @@ class PemsBayDatasetLoader(object):
         A = np.load(os.path.join(self.raw_data_dir, "pems_adj_mat.npy"))
         X = np.load(os.path.join(self.raw_data_dir, "pems_node_values.npy")).transpose(
             (1, 2, 0)
-        )
+        )[:,0,:]
+        X = X[:,None,:]
         X = X.astype(np.float32)
 
         # Normalise as in DCRNN paper (via Z-Score Method)
