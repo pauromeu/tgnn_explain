@@ -124,7 +124,7 @@ class Rescaler:
 # Hyperparameters
 # =====================================
 # Model
-node_features = 1
+node_features = 2
 out_channels = 32
 K = 3
 
@@ -135,14 +135,14 @@ dataset_type_validate = "la"  # 'la' or 'bay'
 test_proportion_dataset = 0.2
 
 # Training
-num_workers = 16
-batch_size = 64
+num_workers = 1
+batch_size = 32
 resume_training = True
 tau_sampling = 3000  # should be 3000 for full training
 
 # Paths
 logs_path = "runs/logs"
-checkpoint_path = "runs/model_checkpoint_dcrnn_no_skip.pth"
+checkpoint_path = "runs/model_checkpoint_dcrnn.pth"
 
 
 # =====================================
