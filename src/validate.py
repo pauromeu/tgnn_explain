@@ -68,6 +68,51 @@ class Metrics:
         self.non_averaged_mape = torch.zeros(2, 12).to("cuda")
 
 
+class Rescaler:
+    def __init__(
+        self,
+        dataset_type_train,
+        dataset_type_validate,
+        raw_data_dir=os.path.join(os.getcwd(), "data"),
+    ):
+        self.summand, self.mult = self.compute_renorms(
+            raw_data_dir, dataset_type_train, dataset_type_validate
+        )
+
+    def compute_renorms(self, raw_data_dir, dataset_type_train, dataset_type_validate):
+        if dataset_type_train == dataset_type_validate:
+            return 0, 1
+        X_la = np.load(os.path.join(raw_data_dir, "node_values.npy")).transpose(
+            (1, 2, 0)
+        )
+        X_la = X_la.astype(np.float32)
+        X_bay = np.load(os.path.join(raw_data_dir, "pems_node_values.npy")).transpose(
+            (1, 2, 0)
+        )
+        X_bay = X_bay.astype(np.float32)
+
+        dataset_norms_la = (
+            np.mean(X_la, axis=(0, 2))[None, None, :, None],
+            np.std(X_la, axis=(0, 2))[None, None, :, None],
+        )  # single feature
+        dataset_norms_bay = (
+            np.mean(X_bay, axis=(0, 2))[None, None, :, None],
+            np.std(X_bay, axis=(0, 2))[None, None, :, None],
+        )
+
+        if dataset_type_validate == "la":
+            s1, m1 = dataset_norms_la  # rescale la to normal
+            s2, m2 = dataset_norms_bay  # and then normalize by bay
+        else:
+            s1, m1 = dataset_norms_bay  # rescale bay to normal
+            s2, m2 = dataset_norms_la  # and then normalize by la
+
+        return (m1 - m2) / s2, s1 / s2
+
+    def rescale(self, y):
+        return y * self.mult + self.summand
+
+
 # =====================================
 # =====================================
 # Validate a DCRNN model on the METR-LA dataset
@@ -85,7 +130,8 @@ K = 3
 
 # Data
 proportion_original_dataset = 1  # Use 1% of the original dataset to debug
-dataset_type = "la"  # 'la' or 'bay'
+dataset_type_train = "bay"
+dataset_type_validate = "la"  # 'la' or 'bay'
 test_proportion_dataset = 0.2
 
 # Training
@@ -104,7 +150,8 @@ checkpoint_path = "runs/model_checkpoint_dcrnn_no_skip.pth"
 # =====================================
 if __name__ == "__main__":
     datasets = {"la": get_metr_la_dataset, "bay": get_pems_bay_dataset}
-    dataset = datasets[dataset_type]()
+    dataset = datasets[dataset_type_validate]()
+    rescaler = Rescaler(dataset_type_train, dataset_type_validate)
 
     train_loader, val_loader, test_loader = get_loaders(
         dataset,
@@ -146,15 +193,18 @@ if __name__ == "__main__":
 
     # Validation loop
     model.eval()
-    metrics = Metrics(dataset_type)
+    metrics = Metrics(dataset_type_validate)
     with torch.no_grad():
         for s, data in enumerate(test_loader):
             x, edge_index, edge_weight, y = data
-            x = x.to(device)  # Remove batch dimension and move to device
             edge_index = edge_index[0].to(device)
             edge_weight = edge_weight[0].to(device)
-            y = y.to(device)
 
+            x = rescaler.rescale(x)
+            y = rescaler.rescale(y)
+
+            x = x.to(device)
+            y = y.to(device)
             # print mean and std of x and y
             h = None
             y_hat = model(x, edge_index, edge_weight, h)
@@ -162,7 +212,10 @@ if __name__ == "__main__":
             metrics.update(y, y_hat)
 
             if s % (len(test_loader) // 100 + 1) == 0:
-                print(f"\r {s}/{len(test_loader)}", end="")
+                print(
+                    f"\r {s}/{len(test_loader)}, MSE: {metrics.compute()['MSE'].mean()}",
+                    end="",
+                )
 
     print()
 
