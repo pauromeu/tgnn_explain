@@ -113,6 +113,8 @@ class Rescaler:
 
     def rescale(self, y):
         return y * self.mult + self.summand
+    def rerescale(self, y):
+        return (y - self.summand) / self.mult
 
 
 # =====================================
@@ -208,13 +210,14 @@ if __name__ == "__main__":
             edge_weight = edge_weight[0].to(device)
 
             x = rescaler.rescale(x)
-            y = rescaler.rescale(y)
 
             x = x.to(device)
             y = y.to(device)
             # print mean and std of x and y
             h = None
             y_hat = model(x, edge_index, edge_weight, h)
+
+            y_hat = rescaler.rerescale(y_hat)
 
             metrics.update(y, y_hat)
 
