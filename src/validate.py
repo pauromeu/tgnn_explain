@@ -11,9 +11,12 @@ from torch_geometric.data import Batch
 
 
 class Metrics:
-    def __init__(self, dataset_type, raw_data_dir=os.path.join(os.getcwd(), "data")):
+    def __init__(
+        self, dataset_type, raw_data_dir=os.path.join(os.getcwd(), "data"), device="cpu"
+    ):
         self.compute_std(dataset_type, raw_data_dir)
         self.reset()
+        self.device = device
 
     def update(self, y, y_hat):
         # y and y_hat are torch tensors of shape (batch_size, num_nodes, num_features, num_timesteps)
@@ -57,15 +60,17 @@ class Metrics:
 
         # should only have two values
         self.means = torch.tensor(np.mean(X, axis=(0, 2))[None, None, :, None]).to(
-            "cuda"
+            self.device
         )
-        self.stds = torch.tensor(np.std(X, axis=(0, 2))[None, None, :, None]).to("cuda")
+        self.stds = torch.tensor(np.std(X, axis=(0, 2))[None, None, :, None]).to(
+            self.device
+        )
 
     def reset(self):
         self.num_samples = 0
-        self.non_averaged_mse = torch.zeros(2, 12).to("cuda")
-        self.non_averaged_mae = torch.zeros(2, 12).to("cuda")
-        self.non_averaged_mape = torch.zeros(2, 12).to("cuda")
+        self.non_averaged_mse = torch.zeros(2, 12).to(self.device)
+        self.non_averaged_mae = torch.zeros(2, 12).to(self.device)
+        self.non_averaged_mape = torch.zeros(2, 12).to(self.device)
 
 
 class Rescaler:
@@ -124,14 +129,14 @@ class Rescaler:
 # Hyperparameters
 # =====================================
 # Model
-node_features = 2
+node_features = 1
 out_channels = 32
 K = 3
 
 # Data
 proportion_original_dataset = 1  # Use 1% of the original dataset to debug
 dataset_type_train = "bay"
-dataset_type_validate = "la"  # 'la' or 'bay'
+dataset_type_validate = "bay"  # 'la' or 'bay'
 test_proportion_dataset = 0.2
 
 # Training
@@ -142,7 +147,13 @@ tau_sampling = 3000  # should be 3000 for full training
 
 # Paths
 logs_path = "runs/logs"
-checkpoint_path = "runs/model_checkpoint_dcrnn.pth"
+
+assert dataset_type_train in ["la", "bay"]
+checkpoint_path = (
+    "runs/model_checkpoint_dcrnn_no_skip.pth"
+    if dataset_type_train == "bay"
+    else "runs/model_checkpoint_dcrnn_no_skip_LA.pth"
+)
 
 
 # =====================================
@@ -193,7 +204,7 @@ if __name__ == "__main__":
 
     # Validation loop
     model.eval()
-    metrics = Metrics(dataset_type_validate)
+    metrics = Metrics(dataset_type_validate, device=device)
     with torch.no_grad():
         for s, data in enumerate(test_loader):
             x, edge_index, edge_weight, y = data
