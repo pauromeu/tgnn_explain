@@ -24,13 +24,13 @@ class Metrics:
         y_hat = self.destandardize(y_hat)
         for i in range(y.shape[3]):
             # get mask from y that is different from 0
-            mask = y[:,:,:,i] > 1
-            y_i = y[:,:,:,i][mask]
-            y_hat_i = y_hat[:,:,:,i][mask]
-            self.num_samples_per_time[i] += mask.sum()
-            self.non_averaged_mse[i] += torch.sum((y_i - y_hat_i) ** 2)
-            self.non_averaged_mae[i] += torch.sum(torch.abs(y_i - y_hat_i))
-            self.non_averaged_mape[i] += torch.sum(torch.abs((y_i - y_hat_i) / y_i))
+            mask = y[:, :, :, i] > 1
+            y_i = y[:, :, :, i][mask]
+            y_hat_i = y_hat[:, :, :, i][mask]
+            self.num_samples[:, i] += mask.sum()
+            self.non_averaged_mse[:, i] += torch.sum((y_i - y_hat_i) ** 2)
+            self.non_averaged_mae[:, i] += torch.sum(torch.abs(y_i - y_hat_i))
+            self.non_averaged_mape[:, i] += torch.sum(torch.abs((y_i - y_hat_i) / y_i))
 
     def destandardize(self, y):
         return y * self.stds + self.means
@@ -64,7 +64,7 @@ class Metrics:
         )
 
     def reset(self):
-        self.num_samples = torch.zeros(2,12).to(self.device)
+        self.num_samples = torch.zeros(2, 12).to(self.device)
         self.non_averaged_mse = torch.zeros(2, 12).to(self.device)
         self.non_averaged_mae = torch.zeros(2, 12).to(self.device)
         self.non_averaged_mape = torch.zeros(2, 12).to(self.device)
@@ -94,12 +94,12 @@ class Rescaler:
         X_bay = X_bay.astype(np.float32)
 
         dataset_norms_la = (
-            np.mean(X_la, axis=(0, 2))[None, None, :, None],
-            np.std(X_la, axis=(0, 2))[None, None, :, None],
+            np.mean(X_la, axis=(0, 2))[None, None, 0:1, None],
+            np.std(X_la, axis=(0, 2))[None, None, 0:1, None],
         )  # single feature
         dataset_norms_bay = (
-            np.mean(X_bay, axis=(0, 2))[None, None, :, None],
-            np.std(X_bay, axis=(0, 2))[None, None, :, None],
+            np.mean(X_bay, axis=(0, 2))[None, None, 0:1, None],
+            np.std(X_bay, axis=(0, 2))[None, None, 0:1, None],
         )
 
         if dataset_type_validate == "la":
@@ -133,14 +133,13 @@ K = 3
 # Data
 proportion_original_dataset = 1  # Use 1% of the original dataset to debug
 dataset_type_train = "bay"
-dataset_type_validate = "bay"  # 'la' or 'bay'
+dataset_type_validate = "la"  # 'la' or 'bay'
 test_proportion_dataset = 0.2
 
 # Training
 num_workers = 1
 batch_size = 32
 resume_training = True
-tau_sampling = 3000  # should be 3000 for full training
 
 # Paths
 logs_path = "runs/logs"
