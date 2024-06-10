@@ -14,45 +14,58 @@ class Metrics:
     def __init__(self, dataset_type, raw_data_dir=os.path.join(os.getcwd(), "data")):
         self.compute_std(dataset_type, raw_data_dir)
         self.reset()
+
     def update(self, y, y_hat):
         # y and y_hat are torch tensors of shape (batch_size, num_nodes, num_features, num_timesteps)
         y = self.destandardize(y)
         y_hat = self.destandardize(y_hat)
-        self.num_samples += y.shape[0]*y.shape[1]
+
+        # remove y with less than 10 and take y_hat with the same indices
+        mask = torch.sum(y, dim=(1, 2, 3)) > 10
+        y = y[mask]
+        y_hat = y_hat[mask]
+
+        self.num_samples += y.shape[0] * y.shape[1]
         self.non_averaged_mse += torch.sum((y - y_hat) ** 2, dim=(0, 1))
         self.non_averaged_mae += torch.sum(torch.abs(y - y_hat), dim=(0, 1))
-        self.non_averaged_mape += torch.sum(torch.abs((y - y_hat) / y), dim=(0, 1))
+        self.non_averaged_mape += torch.sum(
+            torch.abs((y - y_hat) / (y + 1)), dim=(0, 1)
+        )
+
     def destandardize(self, y):
         return y * self.stds + self.means
+
     def compute(self):
         metrics = {
-            "MSE": self.non_averaged_mse / self.num_samples,
-            "RMSE": np.sqrt(self.non_averaged_mse / self.num_samples),
-            "MAE": self.non_averaged_mae / self.num_samples,
-            "MAPE": self.non_averaged_mape / self.num_samples,
+            "MSE": self.non_averaged_mse.cpu() / self.num_samples,
+            "RMSE": np.sqrt(self.non_averaged_mse.cpu() / self.num_samples),
+            "MAE": self.non_averaged_mae.cpu() / self.num_samples,
+            "MAPE": self.non_averaged_mape.cpu() / self.num_samples,
         }
         return metrics
+
     def compute_std(self, dataset_type, raw_data_dir):
-        if dataset_type == 'la':
+        if dataset_type == "la":
             X = np.load(os.path.join(raw_data_dir, "node_values.npy")).transpose(
                 (1, 2, 0)
             )
-        elif dataset_type == 'bay':
+        elif dataset_type == "bay":
             X = np.load(os.path.join(raw_data_dir, "pems_node_values.npy")).transpose(
                 (1, 2, 0)
             )
         X = X.astype(np.float32)
 
         # should only have two values
-        self.means = torch.tensor(np.mean(X, axis=(0, 2))[None,None,:,None])
-        self.stds = torch.tensor(np.std(X, axis=(0, 2))[None,None,:,None])
+        self.means = torch.tensor(np.mean(X, axis=(0, 2))[None, None, :, None]).to(
+            "cuda"
+        )
+        self.stds = torch.tensor(np.std(X, axis=(0, 2))[None, None, :, None]).to("cuda")
 
     def reset(self):
         self.num_samples = 0
-        self.non_averaged_mse = torch.zeros(2, 12)
-        self.non_averaged_mae = torch.zeros(2, 12)
-        self.non_averaged_mape = torch.zeros(2, 12)
-
+        self.non_averaged_mse = torch.zeros(2, 12).to("cuda")
+        self.non_averaged_mae = torch.zeros(2, 12).to("cuda")
+        self.non_averaged_mape = torch.zeros(2, 12).to("cuda")
 
 
 # =====================================
@@ -66,31 +79,31 @@ class Metrics:
 # Hyperparameters
 # =====================================
 # Model
-node_features = 2
+node_features = 1
 out_channels = 32
 K = 3
 
 # Data
 proportion_original_dataset = 1  # Use 1% of the original dataset to debug
-dataset_type = 'bay'  # 'la' or 'bay'
+dataset_type = "la"  # 'la' or 'bay'
 test_proportion_dataset = 0.2
 
 # Training
-num_workers = 1
-batch_size = 32
+num_workers = 16
+batch_size = 64
 resume_training = True
 tau_sampling = 3000  # should be 3000 for full training
 
 # Paths
 logs_path = "runs/logs"
-checkpoint_path = "runs/model_checkpoint_dcrnn.pth"
+checkpoint_path = "runs/model_checkpoint_dcrnn_no_skip.pth"
 
 
 # =====================================
 # Data
 # =====================================
 if __name__ == "__main__":
-    datasets = { 'la': get_metr_la_dataset, 'bay': get_pems_bay_dataset }
+    datasets = {"la": get_metr_la_dataset, "bay": get_pems_bay_dataset}
     dataset = datasets[dataset_type]()
 
     train_loader, val_loader, test_loader = get_loaders(
@@ -156,5 +169,3 @@ if __name__ == "__main__":
     metrics = metrics.compute()
 
     print(f"Metrics: \n{metrics}")
-
-
