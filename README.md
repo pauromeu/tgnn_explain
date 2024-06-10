@@ -16,13 +16,19 @@ pip install tensorboard
 
 ## Run the code:
 
-### Train the model:
+### 1. Train the model:
 
 ```bash
 python -m src.train
 ```
 
-### Explain the model:
+### 2. Evaluate the model:
+
+```bash
+python -m src.evaluate
+```
+
+### 3. Explain the model:
 
 ```bash
 python -m src.explain
