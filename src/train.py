@@ -2,7 +2,7 @@ import os
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
-from src.data import get_loaders, get_pems_bay_dataset
+from src.data import get_loaders, get_pems_bay_dataset, get_metr_la_dataset
 from src.torch_geometric_temporal.train_test_split import temporal_signal_split
 from src.model.dcrnn import DCRNN
 
@@ -25,24 +25,24 @@ out_channels = 32
 K = 3
 
 # Data
-proportion_original_dataset = 0.01  # Use 1% of the original dataset to debug
+proportion_original_dataset = 1  # Use 1% of the original dataset to debug
 
 # Training
 num_workers = 16
 batch_size = 64
-resume_training = False
+resume_training = True
 tau_sampling = 20  # should be 3000 for full training
 
 # Paths
-logs_path = "runs/logs"
-checkpoint_path = "runs/model_checkpoint_dcrnn.pth"
+logs_path = "runs/logs_dcrnn_LA/"
+checkpoint_path = "runs/model_checkpoint_dcrnn_no_skip_LA.pth"
 
 
 # =====================================
 # Data
 # =====================================
 if __name__ == "__main__":
-    dataset = get_pems_bay_dataset()
+    dataset = get_metr_la_dataset()
 
     train_loader, val_loader, test_loader = get_loaders(
         dataset,
