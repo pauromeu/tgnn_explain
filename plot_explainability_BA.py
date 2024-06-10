@@ -61,7 +61,7 @@ def main():
     # load the node_masks.pt file to get the continous node masks that we will plot as colors
     full_masks = torch.load("node_mask.pt", map_location="cpu")
     full_masks = full_masks.detach().numpy()
-    full_masks = full_masks[:,:full_masks.shape[1]//2]
+    full_masks = full_masks[:,:]
 
     if len(full_masks.shape) > 1:
         node_masks = np.mean(full_masks, axis=1)
@@ -74,9 +74,14 @@ def main():
     plt.figure(figsize=(8, 8))
     pos = dict(zip(range(coordinates.shape[0]), coordinates))
     shape_types = ['o', 'v', '>', '<']
+    # share the same colorbar for all the shapes, such that the minimum and maximum values are the same
+    minimum = np.min(node_masks)
+    maximum = np.max(node_masks)
     for shape in shape_types:
         mask = np.where(point_shapes == shape)[0]
-        plt.scatter(coordinates[:, 1][mask], coordinates[:, 0][mask], c=node_masks[mask], s=sizes[mask], cmap="OrRd", marker=shape)
+        if len(mask) > 0:
+            plt.scatter(coordinates[mask, 1], coordinates[mask, 0], s=sizes[mask], c=node_masks[mask], cmap="OrRd", marker=shape, vmin=minimum, vmax=maximum)
+
     plt.colorbar()
     plt.title("PEMS-BAY Network")
     plt.show()
