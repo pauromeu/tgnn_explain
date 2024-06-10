@@ -22,18 +22,15 @@ class Metrics:
         # y and y_hat are torch tensors of shape (batch_size, num_nodes, num_features, num_timesteps)
         y = self.destandardize(y)
         y_hat = self.destandardize(y_hat)
-
-        # remove y with less than 10 and take y_hat with the same indices
-        mask = torch.sum(y, dim=(1, 2, 3)) > 10
-        y = y[mask]
-        y_hat = y_hat[mask]
-
-        self.num_samples += y.shape[0] * y.shape[1]
-        self.non_averaged_mse += torch.sum((y - y_hat) ** 2, dim=(0, 1))
-        self.non_averaged_mae += torch.sum(torch.abs(y - y_hat), dim=(0, 1))
-        self.non_averaged_mape += torch.sum(
-            torch.abs((y - y_hat) / (y + 1)), dim=(0, 1)
-        )
+        for i in range(y.shape[3]):
+            # get mask from y that is different from 0
+            mask = y[:,:,:,i] > 1
+            y_i = y[:,:,:,i][mask]
+            y_hat_i = y_hat[:,:,:,i][mask]
+            self.num_samples_per_time[i] += mask.sum()
+            self.non_averaged_mse[i] += torch.sum((y_i - y_hat_i) ** 2)
+            self.non_averaged_mae[i] += torch.sum(torch.abs(y_i - y_hat_i))
+            self.non_averaged_mape[i] += torch.sum(torch.abs((y_i - y_hat_i) / y_i))
 
     def destandardize(self, y):
         return y * self.stds + self.means
@@ -67,7 +64,7 @@ class Metrics:
         )
 
     def reset(self):
-        self.num_samples = 0
+        self.num_samples = torch.zeros(2,12).to(self.device)
         self.non_averaged_mse = torch.zeros(2, 12).to(self.device)
         self.non_averaged_mae = torch.zeros(2, 12).to(self.device)
         self.non_averaged_mape = torch.zeros(2, 12).to(self.device)
