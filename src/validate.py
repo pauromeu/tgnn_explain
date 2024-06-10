@@ -14,9 +14,9 @@ class Metrics:
     def __init__(
         self, dataset_type, raw_data_dir=os.path.join(os.getcwd(), "data"), device="cpu"
     ):
+        self.device = device
         self.compute_std(dataset_type, raw_data_dir)
         self.reset()
-        self.device = device
 
     def update(self, y, y_hat):
         # y and y_hat are torch tensors of shape (batch_size, num_nodes, num_features, num_timesteps)
