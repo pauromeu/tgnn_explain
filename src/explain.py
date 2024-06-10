@@ -32,12 +32,12 @@ class Rescaler:
         X_bay = X_bay.astype(np.float32)
 
         dataset_norms_la = (
-            np.mean(X_la, axis=(0, 2))[None, None, :, None],
-            np.std(X_la, axis=(0, 2))[None, None, :, None],
+            np.mean(X_la, axis=(0, 2))[None, None, :1, None],
+            np.std(X_la, axis=(0, 2))[None, None, :1, None],
         )  # single feature
         dataset_norms_bay = (
-            np.mean(X_bay, axis=(0, 2))[None, None, :, None],
-            np.std(X_bay, axis=(0, 2))[None, None, :, None],
+            np.mean(X_bay, axis=(0, 2))[None, None, :1, None],
+            np.std(X_bay, axis=(0, 2))[None, None, :1, None],
         )
 
         if dataset_type_validate == "la":
